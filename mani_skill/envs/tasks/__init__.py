@@ -2,10 +2,11 @@ from .control import *
 from .dexterity import *
 from .digital_twins import *
 from .drawing import *
-from .empty_env import EmptyEnv
+from .empty_env import *
+from .empty_mjcf_env import *
 from .fmb import *
 from .humanoid import *
 from .mobile_manipulation import *
 from .quadruped import *
-from .rotate_cube import RotateCubeEnv
+from .rotate_cube import *
 from .tabletop import *
