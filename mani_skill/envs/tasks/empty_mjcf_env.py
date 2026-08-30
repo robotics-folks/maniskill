@@ -5,6 +5,8 @@ import torch
 
 from mani_skill.envs.sapien_env import BaseEnv
 from mani_skill.loaders.mjcf.actor_loader import MjcfAssetActorLoader
+from mani_skill.loaders.mjcf.articulation_loader import MjcfAssetArticulationLoader
+from mani_skill.loaders.mjcf.common import is_asset_articulated
 from mani_skill.sensors.camera import CameraConfig
 from mani_skill.utils import sapien_utils
 from mani_skill.utils.building.ground import build_ground
@@ -17,6 +19,7 @@ class EmptyMjcfEnv(BaseEnv):
 
     def __init__(self, *args, model_path: Path | None = None, **kwargs) -> None:
         self._mjcf_actor_loader = MjcfAssetActorLoader()
+        self._mjcf_articulation_loader = MjcfAssetArticulationLoader()
         self._model_path = model_path
 
         super().__init__(*args, **kwargs)
@@ -36,9 +39,13 @@ class EmptyMjcfEnv(BaseEnv):
         self.ground.set_collision_group_bit(group=2, bit_idx=30, bit=1)
 
         self._mjcf_actor_loader.set_scene(self.scene)
+        self._mjcf_articulation_loader.set_scene(self.scene)
 
         if self._model_path and self._model_path.is_file():
-            builder = self._mjcf_actor_loader.load_from_xml(self._model_path)
+            if is_asset_articulated(self._model_path):
+                builder = self._mjcf_articulation_loader.load_from_xml(self._model_path)
+            else:
+                builder = self._mjcf_actor_loader.load_from_xml(self._model_path)
             builder.build(self._model_path.stem)
 
     def _initialize_episode(self, env_idx: torch.Tensor, options: dict):

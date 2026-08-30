@@ -48,7 +48,7 @@ class MjcfJointInfo:
     type: Literal["free", "fixed", "hinge", "slide", "ball"]
     pos: np.ndarray = field(default_factory=lambda: np.zeros(3))
     axis: np.ndarray = field(default_factory=X_AXIS.copy)
-    limited: int = False
+    limited: bool = False
     limits: np.ndarray = field(default_factory=lambda: np.array([-np.inf, np.inf]))
     frictionloss: float = 0.0
     damping: float = 0.0
@@ -234,3 +234,8 @@ def has_any_non_free_joint(root_body: mj.MjsBody) -> bool:
         stack.extend(body.bodies)
 
     return has_non_free_joint
+
+
+def is_asset_articulated(filepath: Path) -> bool:
+    spec = mj.MjSpec.from_file(filepath.as_posix())
+    return any(jnt.type != mj.mjtJoint.mjJNT_FREE for jnt in spec.joints)
