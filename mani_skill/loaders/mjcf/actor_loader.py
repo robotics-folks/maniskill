@@ -30,7 +30,6 @@ def add_visuals_to_actor_builder(
     mj_spec: mj.MjSpec,
     mj_body: mj.MjsBody,
     rel_pose_to_parent: Pose,
-    mj_model_dir: Path,
     materials: dict[str, RenderMaterial],
 ) -> None:
     visual_specs = get_visual_specs_from_body(mj_body)
@@ -107,7 +106,6 @@ def add_colliders_to_actor_builder(
     mj_spec: mj.MjSpec,
     mj_body: mj.MjsBody,
     rel_pose_to_parent: Pose,
-    mj_model_dir: Path,
 ) -> None:
     colliders_specs = get_collider_specs_from_body(mj_body)
     for col_spec in colliders_specs:
@@ -176,7 +174,6 @@ def add_colliders_to_actor_builder(
             case mj.mjtGeom.mjGEOM_MESH:
                 mesh_spec = mj_spec.mesh(col_spec.meshname)
                 if mesh_spec is not None:
-                    # mesh_path = mj_model_dir / mj_spec.meshdir / mesh_spec.file
                     path_str = os.path.join(
                         mj_spec.modelfiledir, mj_spec.meshdir, mesh_spec.file
                     )
@@ -282,28 +279,20 @@ class MjcfAssetActorLoader:
             spec: mj.MjSpec,
             body: mj.MjsBody,
             rel_pose: Pose,
-            model_dir: Path,
             materials: dict[str, RenderMaterial],
         ) -> None:
-            add_visuals_to_actor_builder(
-                builder, spec, body, rel_pose, model_dir, materials
-            )
-            add_colliders_to_actor_builder(builder, spec, body, rel_pose, model_dir)
+            add_visuals_to_actor_builder(builder, spec, body, rel_pose, materials)
+            add_colliders_to_actor_builder(builder, spec, body, rel_pose)
             builder.set_physx_body_type(body_type)
 
             for child in body.bodies:
                 body_pose = Pose(p=tuple(child.pos), q=tuple(get_orientation(child)))
                 make_tree_recursive(
-                    builder, spec, child, rel_pose * body_pose, model_dir, materials
+                    builder, spec, child, rel_pose * body_pose, materials
                 )
 
         make_tree_recursive(
-            actor_builder,
-            self._spec,
-            mj_root_body,
-            Pose(),
-            self._model_dir,
-            self._materials,
+            actor_builder, self._spec, mj_root_body, Pose(), self._materials
         )
 
         return actor_builder

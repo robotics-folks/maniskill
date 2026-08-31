@@ -37,7 +37,6 @@ def add_colliders_to_sapien_link(
     link_builder: LinkBuilder,
     mj_spec: mj.MjSpec,
     mj_body_name: str,
-    mj_model_dir: Path,
 ) -> None:
     mjs_body = mj_spec.body(mj_body_name)
     if mjs_body is None:
@@ -107,7 +106,6 @@ def add_colliders_to_sapien_link(
         elif col_spec.type == mj.mjtGeom.mjGEOM_MESH:
             mesh_spec = mj_spec.mesh(col_spec.meshname)
             if mesh_spec is not None:
-                # mesh_path = mj_model_dir / mj_spec.meshdir / mesh_spec.file
                 path_str = os.path.join(
                     mj_spec.modelfiledir, mj_spec.meshdir, mesh_spec.file
                 )
@@ -130,7 +128,6 @@ def add_visuals_to_sapien_link(
     link: LinkBuilder,
     mj_spec: mj.MjSpec,
     mj_body_name: str,
-    mj_model_dir: Path,
     materials: dict[str, RenderMaterial],
     colliders_are_visuals: bool = False,
 ) -> None:
@@ -200,7 +197,6 @@ def add_visuals_to_sapien_link(
             case mj.mjtGeom.mjGEOM_MESH:
                 mesh_spec = mj_spec.mesh(vis_spec.meshname)
                 if mesh_spec is not None:
-                    # mesh_path = mj_model_dir / mj_spec.meshdir / mesh_spec.file
                     path_str = os.path.join(
                         mj_spec.modelfiledir, mj_spec.meshdir, mesh_spec.file
                     )
@@ -417,16 +413,12 @@ class MjcfAssetArticulationLoader:
                 if len(mjs_body.geoms) > 0:
                     has_any_visuals = any(is_visual(geom) for geom in mjs_body.geoms)
                     add_colliders_to_sapien_link(
-                        link_builder,
-                        self._spec,
-                        link_body_name,
-                        self._model_dir,
+                        link_builder, self._spec, link_body_name
                     )
                     add_visuals_to_sapien_link(
                         link_builder,
                         self._spec,
                         link_body_name,
-                        self._model_dir,
                         self._materials,
                         colliders_are_visuals=not has_any_visuals
                         and self._use_colliders_as_visuals,

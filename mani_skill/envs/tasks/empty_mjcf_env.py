@@ -61,9 +61,6 @@ class EmptyMjcfEnv(BaseEnv):
         return CameraConfig("render_camera", pose, 2048, 2048, 1, 0.01, 100)
 
     def _load_scene(self, options: dict):
-        self.ground = build_ground(self.scene)
-        self.ground.set_collision_group_bit(group=2, bit_idx=30, bit=1)
-
         self._mjcf_actor_loader.set_scene(self.scene)
         self._mjcf_articulation_loader.set_scene(self.scene)
         self._mjcf_scene_loader.set_scene(self.scene)
@@ -75,15 +72,22 @@ class EmptyMjcfEnv(BaseEnv):
                 builder = self._mjcf_actor_loader.load_from_xml(self._model_path)
             builder.build(self._model_path.stem)
 
+        make_ground = True
         if self._scene_path and self._scene_path.is_file():
             actors, articulations = self._mjcf_scene_loader.load(
-                self._scene_path, add_ground=False, add_lights=False
+                self._scene_path, add_ground=True, add_lights=False
             )
+            make_ground = False
+
             print("Actors:")
             pprint(list(actors.keys()))
             print("-" * 20)
             print("Articulation:")
             pprint(list(articulations.keys()))
+
+        if make_ground:
+            self.ground = build_ground(self.scene)
+            self.ground.set_collision_group_bit(group=2, bit_idx=30, bit=1)
 
     def _initialize_episode(self, env_idx: torch.Tensor, options: dict):
         pass

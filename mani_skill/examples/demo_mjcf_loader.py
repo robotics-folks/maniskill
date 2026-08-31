@@ -48,6 +48,9 @@ class Args:
     shader: str = "default"
     """Change shader used for all cameras in the environment for rendering. Default is 'minimal' which is very fast. Can also be 'rt' for ray tracing and generating photo-realistic renders. Can also be 'rt-fast' for a faster but lower quality ray-traced renderer"""
 
+    disable_shadow: bool = False
+    """Whether or not to disable shadows for the lights"""
+
     record_dir: str | None = None
     """Directory to save recordings"""
 
@@ -95,7 +98,7 @@ def main(args: Args):
         "num_envs": args.num_envs,
         "sim_backend": args.sim_backend,
         "render_backend": args.render_backend,
-        "enable_shadow": True,
+        "enable_shadow": not args.disable_shadow,
         "parallel_in_single_scene": parallel_in_single_scene,
     }
     if args.model_path and args.model_path.is_file():
