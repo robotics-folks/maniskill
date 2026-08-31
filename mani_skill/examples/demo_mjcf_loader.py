@@ -24,6 +24,9 @@ class Args:
     model_path: Path | None = None
     """Path to an mjcf model to be loaded"""
 
+    scene_path: Path | None = None
+    """Path to an mjcf scene to be loaded"""
+
     sim_backend: Annotated[str, tyro.conf.arg(aliases=["-b"])] = "auto"
     """Which simulation backend to use. Can be 'auto', 'cpu', 'gpu'"""
 
@@ -97,6 +100,8 @@ def main(args: Args):
     }
     if args.model_path and args.model_path.is_file():
         env_kwargs["model_path"] = args.model_path
+    if args.scene_path and args.scene_path.is_file():
+        env_kwargs["scene_path"] = args.scene_path
     env: BaseEnv = cast(BaseEnv, gym.make(args.env_id, **env_kwargs))
 
     _, _ = env.reset(seed=args.seed, options={"reconfigure": True})

@@ -1,3 +1,4 @@
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
@@ -166,12 +167,15 @@ def parse_textures(spec: mj.MjSpec, model_dir: Path) -> dict[str, MjcfTextureInf
         if tex_spec.name in textures_info:
             print(f"[WARN]: texture with name {tex_spec.name} already parsed")
             continue
+        path_str = os.path.join(spec.modelfiledir, spec.texturedir, tex_spec.file)
+        tex_path = Path(os.path.relpath(path_str))
         textures_info[tex_spec.name] = MjcfTextureInfo(
             name=tex_spec.name,
             type=tex_spec.type,
             rgb1=tex_spec.rgb1.tolist(),
             rgb2=tex_spec.rgb2.tolist(),
-            file=model_dir / tex_spec.file,
+            # file=model_dir / tex_spec.file,
+            file=tex_path,
         )
 
     return textures_info

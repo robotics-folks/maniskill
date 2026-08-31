@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import mujoco as mj
@@ -83,7 +84,11 @@ def add_visuals_to_actor_builder(
             case mj.mjtGeom.mjGEOM_MESH:
                 mesh_spec = mj_spec.mesh(vis_spec.meshname)
                 if mesh_spec is not None:
-                    mesh_path = mj_model_dir / mj_spec.meshdir / mesh_spec.file
+                    # mesh_path = mj_model_dir / mj_spec.meshdir / mesh_spec.file
+                    path_str = os.path.join(
+                        mj_spec.modelfiledir, mj_spec.meshdir, mesh_spec.file
+                    )
+                    mesh_path = Path(os.path.relpath(path_str))
                     material = materials.get(vis_spec.material)
                     builder.add_visual_from_file(
                         pose=rel_pose_to_parent * tf_geom_to_body,
@@ -171,7 +176,11 @@ def add_colliders_to_actor_builder(
             case mj.mjtGeom.mjGEOM_MESH:
                 mesh_spec = mj_spec.mesh(col_spec.meshname)
                 if mesh_spec is not None:
-                    mesh_path = mj_model_dir / mj_spec.meshdir / mesh_spec.file
+                    # mesh_path = mj_model_dir / mj_spec.meshdir / mesh_spec.file
+                    path_str = os.path.join(
+                        mj_spec.modelfiledir, mj_spec.meshdir, mesh_spec.file
+                    )
+                    mesh_path = Path(os.path.relpath(path_str))
                     builder.add_convex_collision_from_file(
                         pose=rel_pose_to_parent * tf_geom_to_body,
                         filename=mesh_path.as_posix(),
