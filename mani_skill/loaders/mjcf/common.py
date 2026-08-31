@@ -2,6 +2,7 @@ import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
+from xml.etree import ElementTree as ET
 
 import mujoco as mj
 import numpy as np
@@ -32,6 +33,22 @@ THOR_COLLISION_GROUPS: dict[str, list[int]] = {
     # "__DYNAMIC_MJT__": [0b0001, 0b1111, 1, 0],
     "__ARTICULABLE_DYNAMIC_MJT__": [0b0000, 0b0111, 1, 0],
 }
+
+
+@dataclass
+class MjcfAssetsFolders:
+    textures: dict[str, Path] = field(default_factory=dict)
+    meshes: dict[str, Path] = field(default_factory=dict)
+
+    def get_best_texture_match(self, name: str) -> Path | None:
+        for tex_name, tex_path in self.textures.items():
+            if tex_name in name:
+                return tex_path
+
+    def get_best_mesh_match(self, name: str) -> Path | None:
+        for mesh_name, mesh_path in self.meshes.items():
+            if mesh_name in name:
+                return mesh_path
 
 
 @dataclass
@@ -160,7 +177,9 @@ def get_rgba_from_geom(mj_spec: mj.MjSpec, mj_geom: mj.MjsGeom) -> np.ndarray:
     return rgba
 
 
-def parse_textures(spec: mj.MjSpec, model_dir: Path) -> dict[str, MjcfTextureInfo]:
+def parse_textures(
+    spec: mj.MjSpec, folders: MjcfAssetsFolders | None = None
+) -> dict[str, MjcfTextureInfo]:
     textures_info: dict[str, MjcfTextureInfo] = {}
     for tex_spec in spec.textures:
         assert isinstance(tex_spec, mj.MjsTexture)
@@ -169,20 +188,25 @@ def parse_textures(spec: mj.MjSpec, model_dir: Path) -> dict[str, MjcfTextureInf
             continue
         path_str = os.path.join(spec.modelfiledir, spec.texturedir, tex_spec.file)
         tex_path = Path(os.path.relpath(path_str))
+        if folders:
+            tex_name = tex_spec.name if tex_spec.name != "" else tex_path.stem
+            if ovr_tex_path := folders.get_best_texture_match(tex_name):
+                tex_path = ovr_tex_path
         textures_info[tex_spec.name] = MjcfTextureInfo(
             name=tex_spec.name,
             type=tex_spec.type,
             rgb1=tex_spec.rgb1.tolist(),
             rgb2=tex_spec.rgb2.tolist(),
-            # file=model_dir / tex_spec.file,
             file=tex_path,
         )
 
     return textures_info
 
 
-def parse_materials(spec: mj.MjSpec, model_dir: Path) -> dict[str, RenderMaterial]:
-    textures_info = parse_textures(spec, model_dir)
+def parse_materials(
+    spec: mj.MjSpec, folders: MjcfAssetsFolders | None = None
+) -> dict[str, RenderMaterial]:
+    textures_info = parse_textures(spec, folders)
 
     materials: dict[str, RenderMaterial] = {}
     for mat_spec in spec.materials:
@@ -243,3 +267,40 @@ def has_any_non_free_joint(root_body: mj.MjsBody) -> bool:
 def is_asset_articulated(filepath: Path) -> bool:
     spec = mj.MjSpec.from_file(filepath.as_posix())
     return any(jnt.type != mj.mjtJoint.mjJNT_FREE for jnt in spec.joints)
+
+
+def visit_model_xml(filepath: Path, folders: MjcfAssetsFolders) -> None:
+    root = ET.parse(filepath).getroot()
+
+    meshdir, texturedir = filepath.parent, filepath.parent
+    if (compiler_elem := root.find("compiler")) is not None:
+        meshdir = filepath.parent / compiler_elem.get("meshdir", "")
+        texturedir = filepath.parent / compiler_elem.get("texturedir", "")
+
+    for mesh_elem in root.findall(".//asset/mesh"):
+        if mesh_file_str := mesh_elem.get("file"):
+            mesh_file = meshdir / mesh_file_str
+            mesh_name = mesh_elem.get("name", mesh_file.stem)
+            folders.meshes[mesh_name] = mesh_file
+
+    for texture_elem in root.findall(".//asset/texture"):
+        if texture_file_str := texture_elem.get("file"):
+            texture_file = texturedir / texture_file_str
+            texture_name = texture_elem.get("name", texture_file.stem)
+            folders.textures[texture_name] = texture_file
+
+    # TODO(wilbert): recurse along other sub models
+
+
+def parse_xml(filepath: Path) -> tuple[mj.MjSpec, MjcfAssetsFolders]:
+    spec = mj.MjSpec.from_file(filepath.as_posix())
+    folders = MjcfAssetsFolders()
+
+    root = ET.parse(filepath).getroot()
+
+    for model_elem in root.findall(".//asset/model"):
+        if model_path_str := model_elem.get("file"):
+            model_filepath = filepath.parent / model_path_str
+            visit_model_xml(model_filepath, folders)
+
+    return spec, folders

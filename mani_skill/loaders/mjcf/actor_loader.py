@@ -16,11 +16,13 @@ from .common import (
     CAPSULE_FIX_POSE,
     CYLINDER_FIX_POSE,
     THOR_COLLISION_GROUPS,
+    MjcfAssetsFolders,
     get_collider_specs_from_body,
     get_orientation,
     get_visual_specs_from_body,
     has_any_non_free_joint,
     parse_materials,
+    parse_xml,
     vec_to_quat,
 )
 
@@ -216,6 +218,7 @@ class MjcfAssetActorLoader:
         root_body_name: str | None = None,
         floating_base: bool | None = None,
         materials: dict[str, RenderMaterial] | None = None,
+        folders: MjcfAssetsFolders | None = None,
     ) -> ActorBuilder:
         """Loads an actor from a given MjSpec for a given scene
 
@@ -249,7 +252,7 @@ class MjcfAssetActorLoader:
         ), "Must provide valid model_dir to the folder containing the mjcf model"
 
         self._materials = (
-            parse_materials(scene_spec, model_dir) if materials is None else materials
+            parse_materials(scene_spec, folders) if materials is None else materials
         )
 
         actor_builder = self._scene.create_actor_builder()
@@ -318,5 +321,7 @@ class MjcfAssetActorLoader:
             ValueError: If the mjcf model couldn't be parsed
 
         """
-        spec = mj.MjSpec.from_file(xml_model.as_posix())
-        return self.load_from_spec(spec, xml_model.parent, floating_base=floating_base)
+        spec, folders = parse_xml(xml_model)
+        return self.load_from_spec(
+            spec, xml_model.parent, floating_base=floating_base, folders=folders
+        )

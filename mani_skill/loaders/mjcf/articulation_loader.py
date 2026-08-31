@@ -19,6 +19,7 @@ from .common import (
     CAPSULE_FIX_POSE,
     CYLINDER_FIX_POSE,
     THOR_COLLISION_GROUPS,
+    MjcfAssetsFolders,
     MjcfJointInfo,
     get_collider_specs_from_body,
     get_frame_axes,
@@ -29,6 +30,7 @@ from .common import (
     is_visual,
     mjc_joint_type_to_str,
     parse_materials,
+    parse_xml,
     vec_to_quat,
 )
 
@@ -37,6 +39,7 @@ def add_colliders_to_sapien_link(
     link_builder: LinkBuilder,
     mj_spec: mj.MjSpec,
     mj_body_name: str,
+    folders: MjcfAssetsFolders | None = None,
 ) -> None:
     mjs_body = mj_spec.body(mj_body_name)
     if mjs_body is None:
@@ -110,6 +113,12 @@ def add_colliders_to_sapien_link(
                     mj_spec.modelfiledir, mj_spec.meshdir, mesh_spec.file
                 )
                 mesh_path = Path(os.path.relpath(path_str))
+                if folders:
+                    mesh_name = (
+                        mesh_spec.name if mesh_spec.name != "" else mesh_path.stem
+                    )
+                    if ovr_mesh_path := folders.get_best_mesh_match(mesh_name):
+                        mesh_path = ovr_mesh_path
                 link_builder.add_convex_collision_from_file(
                     pose=local_pose,
                     filename=mesh_path.as_posix(),
@@ -130,6 +139,7 @@ def add_visuals_to_sapien_link(
     mj_body_name: str,
     materials: dict[str, RenderMaterial],
     colliders_are_visuals: bool = False,
+    folders: MjcfAssetsFolders | None = None,
 ) -> None:
     mjs_body = mj_spec.body(mj_body_name)
     if mjs_body is None:
@@ -201,6 +211,12 @@ def add_visuals_to_sapien_link(
                         mj_spec.modelfiledir, mj_spec.meshdir, mesh_spec.file
                     )
                     mesh_path = Path(os.path.relpath(path_str))
+                    if folders:
+                        mesh_name = (
+                            mesh_spec.name if mesh_spec.name != "" else mesh_path.stem
+                        )
+                        if ovr_mesh_path := folders.get_best_mesh_match(mesh_name):
+                            mesh_path = ovr_mesh_path
                     link.add_visual_from_file(
                         pose=local_pose,
                         filename=mesh_path.as_posix(),
@@ -242,6 +258,7 @@ class MjcfAssetArticulationLoader:
         floating_base: bool | None = None,
         materials: dict[str, RenderMaterial] | None = None,
         is_part_of_scene: bool = False,
+        folders: MjcfAssetsFolders | None = None,
     ) -> ArticulationBuilder:
         """Loads an articulation from a given MjSpec for a given scene
 
@@ -275,7 +292,7 @@ class MjcfAssetArticulationLoader:
         self._num_visuals = 0
 
         self._materials = (
-            parse_materials(scene_spec, model_dir) if materials is None else materials
+            parse_materials(scene_spec, folders) if materials is None else materials
         )
 
         articulation_builder = self._scene.create_articulation_builder()
@@ -309,7 +326,9 @@ class MjcfAssetArticulationLoader:
         dummy_root_link: LinkBuilder = articulation_builder.create_link_builder()
         dummy_root_link.name = root_body_name or "dummy_root_0"
 
-        self._parse_body(mj_root_body, articulation_builder, dummy_root_link, True)
+        self._parse_body(
+            mj_root_body, articulation_builder, dummy_root_link, True, folders
+        )
 
         if not has_freejoint and not floating_base:
             dummy_root_link.set_joint_properties(
@@ -350,8 +369,10 @@ class MjcfAssetArticulationLoader:
             ValueError: If the mjcf model couldn't be parsed
 
         """
-        spec = mj.MjSpec.from_file(xml_model.as_posix())
-        return self.load_from_spec(spec, xml_model.parent, floating_base=floating_base)
+        spec, folders = parse_xml(xml_model)
+        return self.load_from_spec(
+            spec, xml_model.parent, floating_base=floating_base, folders=folders
+        )
 
     def _parse_body(
         self,
@@ -359,6 +380,7 @@ class MjcfAssetArticulationLoader:
         articulation_builder: ArticulationBuilder,
         parent_link_builder: LinkBuilder,
         is_root: bool = False,
+        folders: MjcfAssetsFolders | None = None,
     ) -> LinkBuilder:
         assert (
             self._spec is not None
@@ -413,7 +435,7 @@ class MjcfAssetArticulationLoader:
                 if len(mjs_body.geoms) > 0:
                     has_any_visuals = any(is_visual(geom) for geom in mjs_body.geoms)
                     add_colliders_to_sapien_link(
-                        link_builder, self._spec, link_body_name
+                        link_builder, self._spec, link_body_name, folders=folders
                     )
                     add_visuals_to_sapien_link(
                         link_builder,
@@ -422,6 +444,7 @@ class MjcfAssetArticulationLoader:
                         self._materials,
                         colliders_are_visuals=not has_any_visuals
                         and self._use_colliders_as_visuals,
+                        folders=folders,
                     )
             else:
                 link_builder.set_name(f"{link_body_name}_dummy_{i}")
@@ -497,5 +520,7 @@ class MjcfAssetArticulationLoader:
 
         for mjs_child in mjs_body.bodies:
             assert isinstance(mjs_child, mj.MjsBody)
-            self._parse_body(mjs_child, articulation_builder, link_builder, False)
+            self._parse_body(
+                mjs_child, articulation_builder, link_builder, False, folders
+            )
         return link_builder
