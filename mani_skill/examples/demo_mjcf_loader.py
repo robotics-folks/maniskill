@@ -107,7 +107,7 @@ def main(args: Args):
         env_kwargs["scene_path"] = args.scene_path
     env: BaseEnv = cast(BaseEnv, gym.make(args.env_id, **env_kwargs))
 
-    _, _ = env.reset(seed=args.seed, options={"reconfigure": True})
+    _, _ = env.reset(seed=args.seed, options={"reconfigure": False})
     if args.seed is not None and env.action_space is not None:
         env.action_space.seed(args.seed[0])
     if args.render_mode == "human":
