@@ -5,6 +5,7 @@ from typing import Annotated, cast
 import gymnasium as gym
 import numpy as np
 import sapien
+import torch
 import tyro
 
 from mani_skill.envs.sapien_env import BaseEnv
@@ -105,7 +106,9 @@ def main(args: Args):
         env_kwargs["model_path"] = args.model_path
     if args.scene_path and args.scene_path.is_file():
         env_kwargs["scene_path"] = args.scene_path
-    env: BaseEnv = cast(BaseEnv, gym.make(args.env_id, **env_kwargs))
+    if args.robot_uids:
+        env_kwargs["robot_uids"] = args.robot_uids
+    env = cast(BaseEnv, gym.make(args.env_id, **env_kwargs))
 
     _, _ = env.reset(seed=args.seed, options={"reconfigure": False})
     if args.seed is not None and env.action_space is not None:
@@ -116,7 +119,11 @@ def main(args: Args):
             viewer.paused = args.pause
         env.render()
     while True:
-        action = env.action_space.sample() if env.action_space is not None else None
+        action = None
+        if isinstance(env.unwrapped, BaseEnv):
+            assert env.action_space.shape is not None
+            action = torch.zeros(env.action_space.shape, device=env.unwrapped.device)
+
         _, reward, terminated, truncated, info = env.step(action)
         if verbose:
             print("reward", reward)

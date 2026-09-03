@@ -1,9 +1,12 @@
+# pyright: reportUnusedImport=false
+
 from pathlib import Path
 from pprint import pprint
 
 import numpy as np
 import torch
 
+from mani_skill.agents.robots.courage import FrankaDroid  # noqa: F401
 from mani_skill.envs.sapien_env import BaseEnv
 from mani_skill.loaders.mjcf.actor_loader import MjcfAssetActorLoader
 from mani_skill.loaders.mjcf.articulation_loader import MjcfAssetArticulationLoader
