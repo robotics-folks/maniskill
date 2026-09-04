@@ -66,7 +66,7 @@ class MjcfJointInfo:
     type: Literal["free", "fixed", "hinge", "slide", "ball"]
     pos: np.ndarray = field(default_factory=lambda: np.zeros(3))
     axis: np.ndarray = field(default_factory=X_AXIS.copy)
-    limited: bool = False
+    limited: mj.mjtLimited = mj.mjtLimited.mjLIMITED_AUTO
     limits: np.ndarray = field(default_factory=lambda: np.array([-np.inf, np.inf]))
     frictionloss: float = 0.0
     damping: float = 0.0

@@ -408,7 +408,7 @@ class MjcfAssetArticulationLoader:
                     type=mjc_joint_type_to_str(jnt_spec.type),
                     pos=jnt_spec.pos,
                     axis=jnt_spec.axis,
-                    limited=jnt_spec.limited == mj.mjtLimited,
+                    limited=jnt_spec.limited,
                     limits=limits,
                     frictionloss=jnt_spec.frictionloss,
                     damping=jnt_spec.damping[0].item(),
@@ -481,7 +481,7 @@ class MjcfAssetArticulationLoader:
 
             tf_axis2parent = tf_joint2parent @ tf_axis2joint
 
-            jnt_range_min, jnt_range_max = jnt_info.limits
+            jnt_range_min, jnt_range_max = jnt_info.limits.tolist()
             jnt_limited = (
                 jnt_range_min < jnt_range_max
                 if jnt_info.limited == mj.mjtLimited.mjLIMITED_AUTO
