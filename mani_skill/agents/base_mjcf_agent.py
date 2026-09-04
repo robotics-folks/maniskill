@@ -12,10 +12,11 @@ from mani_skill.utils.structs import Pose
 
 
 def is_position_actuator(act: mj.MjsActuator) -> bool:
-    return (act.dyntype, act.gaintype, act.biastype) == (
+    return (act.dyntype, act.gaintype, act.biastype, act.trntype) == (
         mj.mjtDyn.mjDYN_NONE,
         mj.mjtGain.mjGAIN_FIXED,
         mj.mjtBias.mjBIAS_AFFINE,
+        mj.mjtTrn.mjTRN_JOINT,
     )
 
 
@@ -31,7 +32,7 @@ class BaseMjcfAgent(BaseAgent):
     ) -> None:
         self._mjcf_articulation_loader = MjcfAssetArticulationLoader()
 
-        self._mjcf_controllers = {}
+        self.mjcf_controllers = {}
 
         super().__init__(
             scene, control_freq, control_mode, agent_idx, initial_pose, build_separate
@@ -83,10 +84,10 @@ class BaseMjcfAgent(BaseAgent):
                     damping=kv,
                     normalize_action=False,
                 )
-                if "pd_joint_pos" not in self._mjcf_controllers:
-                    self._mjcf_controllers["pd_joint_pos"] = {}
-                self._mjcf_controllers["pd_joint_pos"][actuator_name] = pd_controller
+                if "pd_joint_pos" not in self.mjcf_controllers:
+                    self.mjcf_controllers["pd_joint_pos"] = {}
+                self.mjcf_controllers["pd_joint_pos"][actuator_name] = pd_controller
 
     @property
     def _controller_configs(self):
-        return self._mjcf_controllers
+        return self.mjcf_controllers
