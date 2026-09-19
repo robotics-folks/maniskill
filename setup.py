@@ -7,7 +7,7 @@ from pathlib import Path
 from setuptools import find_packages, setup
 
 # update this version when a new official pypi release is made
-__version__ = "3.0.1"
+__version__ = "3.0.1b1"
 
 
 def get_package_version():
@@ -98,7 +98,14 @@ def main(argv):
         install_requires=get_dependencies(),
         # Glob patterns do not automatically match dotfiles
         package_data={
-            "mani_skill": ["assets/**", "envs/**/*", "utils/**/*", "shaders/common/**", "shaders/default-mj/**", "shaders/rt-fast-mj/**"],
+            "mani_skill": [
+                "assets/**",
+                "envs/**/*",
+                "utils/**/*",
+                "shaders/common/**",
+                "shaders/default-mj/**",
+                "shaders/rt-fast-mj/**",
+            ],
             "warp_maniskill.warp": ["native/*", "native/nanovdb/*"],
         },
         extras_require={

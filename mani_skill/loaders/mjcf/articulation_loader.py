@@ -432,6 +432,7 @@ class MjcfAssetArticulationLoader:
             )
             if i == len(joints_info) - 1:
                 link_builder.set_name(link_body_name)
+                # TODO(wilbert): add inertial properties
                 if len(mjs_body.geoms) > 0:
                     has_any_visuals = any(is_visual(geom) for geom in mjs_body.geoms)
                     add_colliders_to_sapien_link(
