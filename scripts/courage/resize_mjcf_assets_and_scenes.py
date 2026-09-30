@@ -1,5 +1,6 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Literal
 from xml.etree import ElementTree as ET
 
 import mujoco as mj
@@ -22,27 +23,22 @@ COLLIDERS_CLASSNAMES = (
     "__ARTICULABLE_DYNAMIC_MJT__",
 )
 
-SCENE_DATASET_IDS = (
-    "procthor-10k-train",
-    "procthor-10k-val",
-    "procthor-10k-test",
-    "procthor-objaverse-train",
-    "procthor-objaverse-val",
-    "holodeck-objaverse-train",
-    "holodeck-objaverse-val",
-)
-
 
 @dataclass
 class Args:
-    scale_thor: bool = False
-    scale_objaverse: bool = False
-    scale_ithor: bool = False
-    scale_procthor: bool = False
-
-    thor_filedir: Path | None = None
-    objaverse_filedir: Path | None = None
-    ithor_filedir: Path | None = None
+    objects: list[Literal["thor", "objaverse"]] = field(default_factory=list)
+    scenes: list[
+        Literal[
+            "ithor",
+            "procthor-10k-train",
+            "procthor-10k-val",
+            "procthor-10k-test",
+            "procthor-objaverse-train",
+            "procthor-objaverse-val",
+            "holodeck-objaverse-train",
+            "holodeck-objaverse-val",
+        ]
+    ] = field(default_factory=list)
 
     num_workers: int = 1
 
@@ -103,46 +99,40 @@ def resize_thor_asset(model_path: Path) -> tuple[bool, str]:
     return success, error_msg
 
 
-def update_scenes_scales(scene_path: Path) -> tuple[bool, str]:
+def update_scenes_scales(scene_path: Path) -> tuple[bool, bool, str]:
     success = True
     error_msg = ""
     modified = False
 
-    # TODO(wilbert): use the XML ETree API instead of mjspec here, as we already have all assets
-    # re-scaled, and bc of the .compile() step this is actually pretty slow for full houses T_T
     try:
-        spec = mj.MjSpec.from_file(scene_path.as_posix())
-        for geom in spec.geoms:
-            assert isinstance(geom, mj.MjsGeom)
-            if geom.type != mj.mjtGeom.mjGEOM_MESH:
-                continue
-            if not geom.classname.name in COLLIDERS_CLASSNAMES:
-                continue
-            mesh_handle = spec.mesh(geom.meshname)
-            if mesh_handle is None:
-                continue
+        tree = ET.parse(scene_path)
+        root = tree.getroot()
 
-            if not "objects/thor" in mesh_handle.file:
+        mesh_ids: set[str] = set()
+        for geom_elm in root.findall(".//geom"):
+            if geom_elm.get("class", "") not in COLLIDERS_CLASSNAMES:
                 continue
+            if mesh_id := geom_elm.get("mesh"):
+                mesh_ids.add(mesh_id)
 
-            scale = mesh_handle.scale
-            if np.allclose(scale, np.ones_like(scale), atol=1e-3):
+        for mesh_elm in root.findall(".//asset/mesh"):
+            if not mesh_elm.get("name", "") in mesh_ids:
                 continue
-            modified = True
-            mesh_handle.scale = np.ones_like(scale)
+            if scale_str := mesh_elm.get("scale"):
+                scale = np.array(tuple(map(float, scale_str.split(" "))))
+                if np.allclose(scale, np.ones_like(scale), atol=1e-3):
+                    continue
+                modified = True
+                mesh_elm.set("scale", "1 1 1")
 
         if modified:
-            _ = spec.compile()
-            with open(scene_path.resolve(), "w") as fhandle:
-                fhandle.write(spec.to_xml())
-
-            patch_scene_xml(scene_path)
+            tree.write(scene_path.resolve())
 
     except Exception as e:  # noqa: BLE001
         success = False
         error_msg = f"[ERROR]: couldn't resize scene '{scene_path.stem}', error: {e}"
 
-    return success, error_msg
+    return success, modified, error_msg
 
 
 def patch_scene_xml(scene_path: Path) -> None:
@@ -158,18 +148,18 @@ def patch_scene_xml(scene_path: Path) -> None:
     tree.write(scene_path.resolve())
 
 
+# TODO(wilbert): Seems that xml ElementTree doens't play well with tqdm, so the progress bar is
+# messed up T_T. Might have to try another library like lxml or find a workaround for this
 def main() -> int:
     args = tyro.cli(Args)
 
-    thor_assets_dir: Path | None = None
-    if args.scale_thor:
-        thor_assets_dir = (
-            MJCF_OBJECTS_DIR / "thor" if not args.thor_filedir else args.thor_filedir
-        )
+    for dataset_id in args.objects:
+        objects_dir = MJCF_OBJECTS_DIR / dataset_id
+        if not objects_dir.is_dir():
+            continue
 
-    if thor_assets_dir and thor_assets_dir.is_dir():
         models_filepaths: list[Path] = []
-        for candidate_xml in thor_assets_dir.rglob("*.xml"):
+        for candidate_xml in objects_dir.rglob("*.xml"):
             if any(
                 substr in candidate_xml.stem
                 for substr in ("_old", "_fix", "_upt", "_orig", "_sc")
@@ -179,6 +169,7 @@ def main() -> int:
                 continue
             models_filepaths.append(candidate_xml)
 
+        print(f"Resizing Objects Dataset: '{dataset_id}'")
         if args.num_workers > 1:
             results = p_uimap(
                 resize_thor_asset, models_filepaths, num_cpus=args.num_workers
@@ -193,40 +184,41 @@ def main() -> int:
                 if not success:
                     print(error_msg)
 
-    scenes_filepaths: list[Path] = []
+    for dataset_id in args.scenes:
+        dataset_folder = MJCF_SCENES_DIR / dataset_id
+        if not dataset_folder.is_dir():
+            continue
 
-    ithor_scenes_dir: Path | None = None
-    if args.scale_ithor:
-        ithor_scenes_dir = (
-            MJCF_SCENES_DIR / "ithor" if not args.ithor_filedir else args.ithor_filedir
+        scenes_filepaths = list(
+            dataset_folder.rglob("*.xml")
+            if dataset_id != "ithor"
+            else dataset_folder.glob("*.xml")
         )
 
-    if ithor_scenes_dir and ithor_scenes_dir.is_dir():
-        for candidate_xml in ithor_scenes_dir.glob("*.xml"):
-            if any(
-                substr in candidate_xml.stem
-                for substr in ("_old", "_fix", "_upt", "_orig", "_sc")
-            ):
-                continue
-            scenes_filepaths.append(candidate_xml)
+        print(f"Resizing Scenes Dataset: '{dataset_id}'")
 
-    if args.scale_procthor:
-        for dataset_id in SCENE_DATASET_IDS:
-            dataset_folder = MJCF_SCENES_DIR / dataset_id
-            if not dataset_folder.is_dir():
-                continue
-            scenes_filepaths.extend(dataset_folder.rglob("*.xml"))
+        num_total = 0
+        num_modified = 0
+        if args.num_workers > 1:
+            results = p_uimap(
+                update_scenes_scales, scenes_filepaths, num_cpus=args.num_workers
+            )
+            for success, modified, error_msg in results:
+                num_total += 1
+                if success and modified:
+                    num_modified += 1
+                else:
+                    print(error_msg)
+        else:
+            for scene_path in tqdm(scenes_filepaths):
+                success, modified, error_msg = update_scenes_scales(scene_path)
+                num_total += 1
+                if success and modified:
+                    num_modified += 1
+                else:
+                    print(error_msg)
 
-    if args.num_workers > 1:
-        results = p_uimap(
-            update_scenes_scales, scenes_filepaths, num_cpus=args.num_workers
-        )
-        for success, error_msg in results:
-            if not success:
-                print(error_msg)
-    else:
-        for scene_path in tqdm(scenes_filepaths):
-            update_scenes_scales(scene_path)
+        print(f"Number of scenes modified: {num_modified} / {num_total}")
 
     return 0
 
