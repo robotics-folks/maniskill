@@ -143,6 +143,7 @@ def main(argv):
             "courage": [
                 "viser",
                 "mujoco",
+                "p-tqdm",
                 "molmospaces-resources @ git+https://codeberg.org/robotics-folks/molmospaces-resources.git",
             ],
         },

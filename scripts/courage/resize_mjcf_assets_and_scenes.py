@@ -6,6 +6,7 @@ import mujoco as mj
 import numpy as np
 import trimesh
 import tyro
+from p_tqdm import p_uimap
 from tqdm import tqdm
 
 MJCF_DIR = Path(__file__).parent.parent.parent / "assets-molmospaces" / "mjcf"
@@ -39,9 +40,14 @@ class Args:
 
     fix_skybox_layout: bool = False
 
+    num_workers: int = 1
 
-def resize_thor_asset(model_path: Path) -> None:
+
+def resize_thor_asset(model_path: Path) -> tuple[bool, str]:
+    success = True
+    error_msg = ""
     modified = False
+
     try:
         spec = mj.MjSpec.from_file(model_path.as_posix())
 
@@ -84,11 +90,21 @@ def resize_thor_asset(model_path: Path) -> None:
                 fhandle.write(spec.to_xml())
 
     except Exception as e:  # noqa: BLE001
-        print(f"[ERROR]: couldn't resize thor assets '{model_path.stem}', error: {e}")
+        success = False
+        error_msg = (
+            f"[ERROR]: couldn't resize thor assets '{model_path.stem}', error: {e}"
+        )
+
+    return success, error_msg
 
 
-def update_scenes_scales(scene_path: Path) -> None:
+def update_scenes_scales(scene_path: Path) -> tuple[bool, str]:
+    success = True
+    error_msg = ""
     modified = False
+
+    # TODO(wilbert): use the XML ETree API instead of mjspec here, as we already have all assets
+    # re-scaled, and bc of the .compile() step this is actually pretty slow for full houses T_T
     try:
         spec = mj.MjSpec.from_file(scene_path.as_posix())
         for geom in spec.geoms:
@@ -115,10 +131,13 @@ def update_scenes_scales(scene_path: Path) -> None:
             with open(scene_path.resolve(), "w") as fhandle:
                 fhandle.write(spec.to_xml())
 
-        patch_scene_xml(scene_path)
+            patch_scene_xml(scene_path)
 
     except Exception as e:  # noqa: BLE001
-        print(f"[ERROR]: couldn't resize scene '{scene_path.stem}', error: {e}")
+        success = False
+        error_msg = f"[ERROR]: couldn't resize scene '{scene_path.stem}', error: {e}"
+
+    return success, error_msg
 
 
 def patch_scene_xml(scene_path: Path) -> None:
@@ -156,8 +175,19 @@ def main() -> int:
             continue
         models_filepaths.append(candidate_xml)
 
-    for model_path in tqdm(models_filepaths):
-        resize_thor_asset(model_path)
+    if args.num_workers > 1:
+        results = p_uimap(
+            resize_thor_asset, models_filepaths, num_cpus=args.num_workers
+        )
+        for success, error_msg in results:
+            if not success:
+                print(error_msg)
+
+    else:
+        for model_path in tqdm(models_filepaths):
+            success, error_msg = resize_thor_asset(model_path)
+            if not success:
+                print(error_msg)
 
     scenes_filepaths: list[Path] = []
     for candidate_xml in args.scenes_ithor_dir.glob("*.xml"):
@@ -174,11 +204,26 @@ def main() -> int:
             continue
         scenes_filepaths.extend(dataset_folder.rglob("*.xml"))
 
-    for scene_path in tqdm(scenes_filepaths):
+    if args.num_workers > 1:
         if args.fix_skybox_layout:
-            patch_scene_xml(scene_path)
+            results = p_uimap(
+                patch_scene_xml, scenes_filepaths, num_cpus=args.num_workers
+            )
+            for _ in results:
+                pass
         else:
-            update_scenes_scales(scene_path)
+            results = p_uimap(
+                update_scenes_scales, scenes_filepaths, num_cpus=args.num_workers
+            )
+            for success, error_msg in results:
+                if not success:
+                    print(error_msg)
+    else:
+        for scene_path in tqdm(scenes_filepaths):
+            if args.fix_skybox_layout:
+                patch_scene_xml(scene_path)
+            else:
+                update_scenes_scales(scene_path)
 
     return 0
 
