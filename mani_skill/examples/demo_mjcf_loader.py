@@ -9,11 +9,12 @@ import torch
 import tyro
 
 from mani_skill.envs.sapien_env import BaseEnv
+from mani_skill.visualizers.viser.viewer import ViserViewer
 
 
 @dataclass
 class Args:
-    env_id: Annotated[str, tyro.conf.arg(aliases=["-e"])] = "EmptyMjcfEnv-v1"
+    env_id: Annotated[str, tyro.conf.arg(aliases=["-e"])] = "EmptyMjcf-v1"
     """The environment ID of the task you want to simulate"""
 
     obs_mode: Annotated[str, tyro.conf.arg(aliases=["-o"])] = "none"
@@ -110,6 +111,8 @@ def main(args: Args):
         env_kwargs["robot_uids"] = args.robot_uids
     env = cast(BaseEnv, gym.make(args.env_id, **env_kwargs))
 
+    viser_viewer = ViserViewer(env.unwrapped.scene)  # pyright: ignore
+
     _, _ = env.reset(seed=args.seed, options={"reconfigure": False})
     if args.seed is not None and env.action_space is not None:
         env.action_space.seed(args.seed[0])
@@ -121,8 +124,9 @@ def main(args: Args):
     while True:
         action = None
         if isinstance(env.unwrapped, BaseEnv):
-            assert env.action_space.shape is not None
-            action = torch.zeros(env.action_space.shape, device=env.unwrapped.device)
+            action = None
+            if env.action_space is not None:
+                action = torch.zeros(env.action_space.shape, device=env.unwrapped.device)
 
         _, reward, terminated, truncated, info = env.step(action)
         if verbose:

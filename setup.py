@@ -140,6 +140,11 @@ def main(argv):
                 "sphinx_design",
                 "sphinx-autoapi",
             ],
+            "courage": [
+                "viser",
+                "mujoco",
+                "molmospaces-resources @ git+https://codeberg.org/robotics-folks/molmospaces-resources.git",
+            ],
         },
     )
 
