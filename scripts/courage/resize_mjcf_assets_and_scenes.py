@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from pathlib import Path
+from xml.etree import ElementTree as ET
 
 import mujoco as mj
 import numpy as np
@@ -8,8 +9,11 @@ import tyro
 from tqdm import tqdm
 
 MJCF_DIR = Path(__file__).parent.parent.parent / "assets-molmospaces" / "mjcf"
-MJCF_ASSETS_THOR_DIR = MJCF_DIR / "objects" / "thor"
-MJCF_SCENES_ITHOR_DIR = MJCF_DIR / "scenes" / "ithor"
+MJCF_OBJECTS_DIR = MJCF_DIR / "objects"
+MJCF_SCENES_DIR = MJCF_DIR / "scenes"
+
+MJCF_ASSETS_THOR_DIR = MJCF_OBJECTS_DIR / "thor"
+MJCF_SCENES_ITHOR_DIR = MJCF_SCENES_DIR / "ithor"
 
 COLLIDERS_CLASSNAMES = (
     "__DYNAMIC_MJT__",
@@ -17,11 +21,23 @@ COLLIDERS_CLASSNAMES = (
     "__ARTICULABLE_DYNAMIC_MJT__",
 )
 
+SCENE_DATASET_IDS = (
+    "procthor-10k-train",
+    "procthor-10k-val",
+    "procthor-10k-test",
+    "procthor-objaverse-train",
+    "procthor-objaverse-val",
+    "holodeck-objaverse-train",
+    "holodeck-objaverse-val",
+)
+
 
 @dataclass
 class Args:
     thor_assets_dir: Path = MJCF_ASSETS_THOR_DIR
     scenes_ithor_dir: Path = MJCF_SCENES_ITHOR_DIR
+
+    fix_skybox_layout: bool = False
 
 
 def resize_thor_asset(model_path: Path) -> None:
@@ -99,8 +115,23 @@ def update_scenes_scales(scene_path: Path) -> None:
             with open(scene_path.resolve(), "w") as fhandle:
                 fhandle.write(spec.to_xml())
 
+        patch_scene_xml(scene_path)
+
     except Exception as e:  # noqa: BLE001
         print(f"[ERROR]: couldn't resize scene '{scene_path.stem}', error: {e}")
+
+
+def patch_scene_xml(scene_path: Path) -> None:
+    # Skyboxes in mjspec are still broken when parsed T_T, have to patch the xml file directly
+    tree = ET.parse(scene_path)
+    root = tree.getroot()
+
+    if asset_elm := root.find("asset"):
+        for texture_elm in asset_elm.findall("texture"):
+            if texture_elm.attrib.get("type", "2d") == "skybox":
+                texture_elm.attrib["gridlayout"] = "LFRB.D.."
+
+    tree.write(scene_path)
 
 
 def main() -> int:
@@ -137,8 +168,17 @@ def main() -> int:
             continue
         scenes_filepaths.append(candidate_xml)
 
+    for dataset_id in SCENE_DATASET_IDS:
+        dataset_folder = MJCF_SCENES_DIR / dataset_id
+        if not dataset_folder.is_dir():
+            continue
+        scenes_filepaths.extend(dataset_folder.rglob("*.xml"))
+
     for scene_path in tqdm(scenes_filepaths):
-        update_scenes_scales(scene_path)
+        if args.fix_skybox_layout:
+            patch_scene_xml(scene_path)
+        else:
+            update_scenes_scales(scene_path)
 
     return 0
 
