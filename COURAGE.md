@@ -47,7 +47,7 @@ seems PhysX doesn't play well with scaled mesh colliders :tear_smile:, similar t
 previous to 6.x :
 
 ```bash
-python scripts/courage/resize_mjcf_assets_and_scenes.py
+python scripts/courage/resize_mjcf_assets_and_scenes.py --scale-thor --scale-ithor --num-workers 10
 ```
 
 This will re-scale the assets and the houses as well, for all `thor` assets, and `ithor` houses. I'll

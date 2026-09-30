@@ -35,10 +35,14 @@ SCENE_DATASET_IDS = (
 
 @dataclass
 class Args:
-    thor_assets_dir: Path = MJCF_ASSETS_THOR_DIR
-    scenes_ithor_dir: Path = MJCF_SCENES_ITHOR_DIR
+    scale_thor: bool = False
+    scale_objaverse: bool = False
+    scale_ithor: bool = False
+    scale_procthor: bool = False
 
-    fix_skybox_layout: bool = False
+    thor_filedir: Path | None = None
+    objaverse_filedir: Path | None = None
+    ithor_filedir: Path | None = None
 
     num_workers: int = 1
 
@@ -61,13 +65,14 @@ def resize_thor_asset(model_path: Path) -> tuple[bool, str]:
             if mesh_handle is None:
                 continue
 
+            scale = mesh_handle.scale
+            if np.allclose(scale, np.ones_like(scale), atol=1e-3):
+                continue
+
             mesh_path = model_path.parent / mesh_handle.file
             if not mesh_path.is_file():
                 continue
 
-            scale = mesh_handle.scale
-            if np.allclose(scale, np.ones_like(scale), atol=1e-3):
-                continue
             modified = True
 
             mesh = trimesh.load_mesh(mesh_path.as_posix())
@@ -150,80 +155,78 @@ def patch_scene_xml(scene_path: Path) -> None:
             if texture_elm.attrib.get("type", "2d") == "skybox":
                 texture_elm.attrib["gridlayout"] = "LFRB.D.."
 
-    tree.write(scene_path)
+    tree.write(scene_path.resolve())
 
 
 def main() -> int:
     args = tyro.cli(Args)
 
-    if not args.thor_assets_dir.is_dir():
-        print(f"thor assets dir @ {args.thor_assets_dir} is not a valid directory")
-        return 1
-
-    if not args.scenes_ithor_dir.is_dir():
-        print(f"scenes ithor dir @ {args.scenes_ithor_dir} is not a valid directory")
-        return 1
-
-    models_filepaths: list[Path] = []
-    for candidate_xml in args.thor_assets_dir.rglob("*.xml"):
-        if any(
-            substr in candidate_xml.stem
-            for substr in ("_old", "_fix", "_upt", "_orig", "_sc")
-        ):
-            continue
-        if "_mesh" not in candidate_xml.stem:
-            continue
-        models_filepaths.append(candidate_xml)
-
-    if args.num_workers > 1:
-        results = p_uimap(
-            resize_thor_asset, models_filepaths, num_cpus=args.num_workers
+    thor_assets_dir: Path | None = None
+    if args.scale_thor:
+        thor_assets_dir = (
+            MJCF_OBJECTS_DIR / "thor" if not args.thor_filedir else args.thor_filedir
         )
-        for success, error_msg in results:
-            if not success:
-                print(error_msg)
 
-    else:
-        for model_path in tqdm(models_filepaths):
-            success, error_msg = resize_thor_asset(model_path)
-            if not success:
-                print(error_msg)
+    if thor_assets_dir and thor_assets_dir.is_dir():
+        models_filepaths: list[Path] = []
+        for candidate_xml in thor_assets_dir.rglob("*.xml"):
+            if any(
+                substr in candidate_xml.stem
+                for substr in ("_old", "_fix", "_upt", "_orig", "_sc")
+            ):
+                continue
+            if "_mesh" not in candidate_xml.stem:
+                continue
+            models_filepaths.append(candidate_xml)
 
-    scenes_filepaths: list[Path] = []
-    for candidate_xml in args.scenes_ithor_dir.glob("*.xml"):
-        if any(
-            substr in candidate_xml.stem
-            for substr in ("_old", "_fix", "_upt", "_orig", "_sc")
-        ):
-            continue
-        scenes_filepaths.append(candidate_xml)
-
-    for dataset_id in SCENE_DATASET_IDS:
-        dataset_folder = MJCF_SCENES_DIR / dataset_id
-        if not dataset_folder.is_dir():
-            continue
-        scenes_filepaths.extend(dataset_folder.rglob("*.xml"))
-
-    if args.num_workers > 1:
-        if args.fix_skybox_layout:
+        if args.num_workers > 1:
             results = p_uimap(
-                patch_scene_xml, scenes_filepaths, num_cpus=args.num_workers
-            )
-            for _ in results:
-                pass
-        else:
-            results = p_uimap(
-                update_scenes_scales, scenes_filepaths, num_cpus=args.num_workers
+                resize_thor_asset, models_filepaths, num_cpus=args.num_workers
             )
             for success, error_msg in results:
                 if not success:
                     print(error_msg)
+
+        else:
+            for model_path in tqdm(models_filepaths):
+                success, error_msg = resize_thor_asset(model_path)
+                if not success:
+                    print(error_msg)
+
+    scenes_filepaths: list[Path] = []
+
+    ithor_scenes_dir: Path | None = None
+    if args.scale_ithor:
+        ithor_scenes_dir = (
+            MJCF_SCENES_DIR / "ithor" if not args.ithor_filedir else args.ithor_filedir
+        )
+
+    if ithor_scenes_dir and ithor_scenes_dir.is_dir():
+        for candidate_xml in ithor_scenes_dir.glob("*.xml"):
+            if any(
+                substr in candidate_xml.stem
+                for substr in ("_old", "_fix", "_upt", "_orig", "_sc")
+            ):
+                continue
+            scenes_filepaths.append(candidate_xml)
+
+    if args.scale_procthor:
+        for dataset_id in SCENE_DATASET_IDS:
+            dataset_folder = MJCF_SCENES_DIR / dataset_id
+            if not dataset_folder.is_dir():
+                continue
+            scenes_filepaths.extend(dataset_folder.rglob("*.xml"))
+
+    if args.num_workers > 1:
+        results = p_uimap(
+            update_scenes_scales, scenes_filepaths, num_cpus=args.num_workers
+        )
+        for success, error_msg in results:
+            if not success:
+                print(error_msg)
     else:
         for scene_path in tqdm(scenes_filepaths):
-            if args.fix_skybox_layout:
-                patch_scene_xml(scene_path)
-            else:
-                update_scenes_scales(scene_path)
+            update_scenes_scales(scene_path)
 
     return 0
 
