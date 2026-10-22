@@ -27,10 +27,21 @@ repos:
       - id: ruff-format
         types_or: [ python, pyi ]
 
+  # - repo: local
+  #   hooks:
+  #     - id: pyright
+  #       name: pyright
+  #       entry: uv run --frozen pyright
+  #       language: system
+  #       pass_filenames: false
+
   - repo: local
     hooks:
-      - id: pyright
-        name: pyright
-        entry: uv run --frozen pyright
-        language: system
-        pass_filenames: false
+        - id: ty-check
+          name: Custom ty hook for linting our changes
+          entry: ty check --python ${VIRTUAL_ENV}/bin/python
+          language: system
+          verbose: true
+          types_or: [python, pyi]
+          require_serial: true
+          pass_filenames: true

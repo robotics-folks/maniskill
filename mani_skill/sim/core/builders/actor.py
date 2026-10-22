@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Literal, Mapping, Self, Sequence, cast
+from collections.abc import Mapping, Sequence
+from typing import TYPE_CHECKING, Literal, Self, cast
 
 from mani_skill.sim.core.builders.records import (
     BoxCollisionRecord,

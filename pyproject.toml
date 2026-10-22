@@ -1,8 +1,6 @@
-# Defines package metadata, dependencies, and tool configuration for ManiSkill.
-
 [project]
 name = "mani_skill"
-description = "ManiSkill3: A Unified Benchmark for Generalizable Manipulation Skills"
+description = "ManiSkill4: A Unified Benchmark for Generalizable Manipulation Skills"
 authors = [
     { name = "ManiSkill contributors", email = "stonezt2019@gmail.com" },
 ]
@@ -49,19 +47,28 @@ newton = [
     "newton>=1.4.0",
     "pyglet>2",
 ]
+mujoco = [
+    "mujoco",
+    "mujoco-warp",
+]
 gymnasium = [
     "gymnasium>=1.3.0",
 ]
 
-[dependency-groups]
 dev = [
-    "black>=26.5.1",
-    "isort>=8.0.1",
     "nvidia-ml-py>=13.610.43",
-    "pre-commit>=4.6.0",
-    "pyright>=1.1.411",
-    "pytest>=9.0.3",
+    "pre-commit",
+    "pytest",
+    "ruff",
+    "ty",
+    "pyright",
+    "ipython",
+    "ipdb",
+    "pybind11-stubgen",
 ]
+
+
+[dependency-groups]
 docs = [
     "myst-parser>=5.1.0",
     "pydata-sphinx-theme>=0.18.0",
@@ -85,6 +92,62 @@ markers = [
     "serial",
 ]
 
+###################################################################################################
+# FORMATTING AND LINTING SETUP
+# #################################################################################################
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+exclude = []
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "auto"
+docstring-code-format = false
+
+[tool.ruff.lint]
+select = [
+    # pycodestyle
+    "E",
+    # Pyflakes
+    "F",
+    # pyupgrade
+    "UP",
+    # flake8-bugbear
+    "B",
+    # flake8-simplify
+    "SIM",
+    # isort
+    "I",
+    # PEP8
+    "W",
+    # flake8-annotations
+    "ANN",
+]
+ignore = [
+    "C408", # don't complain about usage of dict() calls
+    "C901", # don't complain about function complexity
+    "E501", # don't complain about line-length (handled by line-length setting)
+    "B006", # defaults shouldn't be mutable
+    "UP015", # redundant mode arguments in open should be fine for now
+    "SIM117", # allow nested with statements for now
+    "SIM102", # don't be picky about nested if statements
+    "SIM114", # don't be picky about merging if branches using or
+    "B905", # allow zip() without `strict` parameter
+    "B026", # allow star-arg after keyword argument for now
+    "ANN001", #	missing-type-function-argument
+    "ANN201", # missing-return-type-undocumented-public-function
+    "ANN202", # missing-return-type-private-function
+    "ANN003", # missing-type-kwargs
+    "E402", # module-import-not-at-top-of-file
+    "ANN401", # allow dynamic typed expressions
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
 [tool.pyright]
 exclude = [
     "**/__pycache__",
@@ -100,11 +163,3 @@ reportPrivateUsage = "none"
 
 [[tool.pyright.executionEnvironments]]
 root = "."
-
-[tool.ruff.lint]
-select = [
-    "E", "F", "B", "I",
-]
-ignore = ["B905"]
-[tool.ruff.lint.pycodestyle]
-max-line-length = 100
