@@ -3,16 +3,23 @@ from __future__ import annotations
 from pathlib import Path
 
 import mujoco as mj
+import numpy as np
 
 from mani_skill.sim.core.builders import (
     BoxCollisionRecord,
+    BoxVisualRecord,
     CapsuleCollisionRecord,
+    CapsuleVisualRecord,
     ConvexMeshCollisionRecord,
     CylinderCollisionRecord,
+    CylinderVisualRecord,
+    MeshVisualRecord,
     MultipleConvexMeshCollisionRecord,
     NonconvexMeshCollisionRecord,
     PlaneCollisionRecord,
+    PlaneVisualRecord,
     SphereCollisionRecord,
+    SphereVisualRecord,
 )
 
 from ...core.builders.actor import ActorBuilder
@@ -20,92 +27,171 @@ from ...core.builders.actor import ActorBuilder
 DEFAULT_COLLIDER_RGBA = (0.8, 0.1, 0.1, 0.5)
 DEFAULT_VISUAL_RGBA = (0.2, 0.2, 0.8, 1.0)
 
+DEF_MUJOCO_RGBA = (0.5, 0.5, 0.5, 1.0)
 
-def add_actor(
+
+def add_collision_records(
     scene_spec: mj.MjSpec,
     builder: ActorBuilder,
-    build_physics: bool,
-    build_render: bool,
+    body_spec: mj.MjsBody | None = None,
 ) -> None:
-    actor_rootbody = scene_spec.worldbody.add_body(
-        name=builder.name,
-        pos=builder.initial_pose.position,
-        quat=builder.initial_pose.orientation,
-    )
+    body_spec = scene_spec.worldbody if body_spec is None else body_spec
 
-    if build_physics:
-        for col_rec in builder.collision_records:
-            match col_rec:
-                case col if isinstance(col, PlaneCollisionRecord):
-                    # TODO(wilbert): infinite planes in mujoco are only geoms of worldbody, right?
-                    pass
-                case col if isinstance(col, BoxCollisionRecord):
-                    actor_rootbody.add_geom(
-                        name=col.name,
-                        type=mj.mjtGeom.mjGEOM_BOX,
-                        size=col.half_size,
-                        density=col.density,
-                        rgba=DEFAULT_COLLIDER_RGBA,
-                    )
-                case col if isinstance(col, CapsuleCollisionRecord):
-                    actor_rootbody.add_geom(
-                        name=col.name,
-                        type=mj.mjtGeom.mjGEOM_CAPSULE,
-                        size=(col.radius, col.half_length, col.radius),
-                        density=col.density,
-                        rgba=DEFAULT_COLLIDER_RGBA,
-                    )
-                case col if isinstance(col, CylinderCollisionRecord):
-                    actor_rootbody.add_geom(
-                        name=col.name,
-                        type=mj.mjtGeom.mjGEOM_CYLINDER,
-                        size=(col.radius, col.half_length, col.radius),
-                        density=col.density,
-                        rgba=DEFAULT_COLLIDER_RGBA,
-                    )
-                case col if isinstance(col, SphereCollisionRecord):
-                    actor_rootbody.add_geom(
-                        name=col.name,
-                        type=mj.mjtGeom.mjGEOM_SPHERE,
-                        size=(col.radius, col.radius, col.radius),
-                        density=col.density,
-                        rgba=DEFAULT_COLLIDER_RGBA,
-                    )
-                case col if isinstance(col, ConvexMeshCollisionRecord):
-                    mesh_filepath = Path(col.filename)
-                    if not mesh_filepath.is_file():
-                        print(
-                            f"[ERROR]: convex mesh '{col.name}' points to invalid file @ '{col.filename}'"
-                        )
-                        continue
-
-                    mesh_name = f"{col.name}_collider"
-                    _ = scene_spec.add_mesh(
-                        name=mesh_name,
-                        file=mesh_filepath.as_posix(),
-                        scale=col.scale,
-                    )
-
-                    actor_rootbody.add_geom(
-                        name=col.name,
-                        type=mj.mjtGeom.mjGEOM_MESH,
-                        meshname=mesh_name,
-                        density=col.density,
-                        rgba=DEFAULT_COLLIDER_RGBA,
-                    )
-                case col if isinstance(col, MultipleConvexMeshCollisionRecord):
+    for col_rec in builder.collision_records:
+        match col_rec:
+            case col if isinstance(col, PlaneCollisionRecord):
+                body_spec.add_geom(
+                    name=col.name,
+                    type=mj.mjtGeom.mjGEOM_PLANE,
+                    size=(10.0, 10.0, 0.01),
+                    rgba=DEFAULT_COLLIDER_RGBA,
+                )
+            case col if isinstance(col, BoxCollisionRecord):
+                body_spec.add_geom(
+                    name=col.name,
+                    type=mj.mjtGeom.mjGEOM_BOX,
+                    size=col.half_size,
+                    density=col.density,
+                    rgba=DEFAULT_COLLIDER_RGBA,
+                )
+            case col if isinstance(col, CapsuleCollisionRecord):
+                body_spec.add_geom(
+                    name=col.name,
+                    type=mj.mjtGeom.mjGEOM_CAPSULE,
+                    size=(col.radius, col.half_length, col.radius),
+                    density=col.density,
+                    rgba=DEFAULT_COLLIDER_RGBA,
+                )
+            case col if isinstance(col, CylinderCollisionRecord):
+                body_spec.add_geom(
+                    name=col.name,
+                    type=mj.mjtGeom.mjGEOM_CYLINDER,
+                    size=(col.radius, col.half_length, col.radius),
+                    density=col.density,
+                    rgba=DEFAULT_COLLIDER_RGBA,
+                )
+            case col if isinstance(col, SphereCollisionRecord):
+                body_spec.add_geom(
+                    name=col.name,
+                    type=mj.mjtGeom.mjGEOM_SPHERE,
+                    size=(col.radius, col.radius, col.radius),
+                    density=col.density,
+                    rgba=DEFAULT_COLLIDER_RGBA,
+                )
+            case col if isinstance(col, ConvexMeshCollisionRecord):
+                mesh_filepath = Path(col.filename)
+                if not mesh_filepath.is_file():
                     print(
-                        f"[WARNING]: Multiple convex colliders are not supported yet. Skipping collider '{col.name}'"
+                        f"[ERROR]: convex mesh '{col.name}' points to invalid file @ '{col.filename}'"
                     )
-                case col if isinstance(col, NonconvexMeshCollisionRecord):
-                    print(
-                        f"[WARNING]: Non convex mesh colliders are not supported by MuJoCo. Skipping this collider '{col.name}'"
-                    )
-                case _:
-                    print(
-                        f"[WARNING]: collision record '{col.__class__.name}' not supported yet for collider '{col.name}'"
-                    )
+                    continue
 
-    # if build_render:
-    #     for vis_rec in builder.visual_records:
-    #         pass
+                mesh_name = f"{col.name}_collider"
+                _ = scene_spec.add_mesh(
+                    name=mesh_name,
+                    file=mesh_filepath.as_posix(),
+                    scale=col.scale,
+                )
+
+                body_spec.add_geom(
+                    name=col.name,
+                    type=mj.mjtGeom.mjGEOM_MESH,
+                    meshname=mesh_name,
+                    density=col.density,
+                    rgba=DEFAULT_COLLIDER_RGBA,
+                )
+            case col if isinstance(col, MultipleConvexMeshCollisionRecord):
+                print(
+                    f"[WARNING]: Multiple convex colliders are not supported yet. Skipping collider '{col.name}'"
+                )
+            case col if isinstance(col, NonconvexMeshCollisionRecord):
+                print(
+                    f"[WARNING]: Non convex mesh colliders are not supported by MuJoCo. Skipping this collider '{col.name}'"
+                )
+            case _:
+                print(
+                    f"[WARNING]: collision record '{col.__class__.name}' not supported yet for collider '{col.name}'"
+                )
+
+
+def add_visual_records(
+    scene_spec: mj.MjSpec,
+    builder: ActorBuilder,
+    body_spec: mj.MjsBody | None = None,
+) -> None:
+    body_spec = scene_spec.worldbody if body_spec is None else body_spec
+
+    for vis_rec in builder.visual_records:
+        vis_is_rgba_default = np.allclose(vis_rec.material.rgba, DEF_MUJOCO_RGBA)
+        vis_has_any_texture = vis_rec.material.has_any_texture()
+
+        mat_name: str | None = None
+        if not vis_is_rgba_default and vis_has_any_texture:
+            mat_name = f"mat_{vis_rec.name}"
+            scene_spec.add_material(
+                name=mat_name,
+                rgba=vis_rec.material.rgba,
+            )
+
+        vis_geom_spec: mj.MjsGeom | None = None
+        match vis_rec:
+            case vis if isinstance(vis, PlaneVisualRecord):
+                vis_geom_spec = body_spec.add_geom(
+                    name=vis.name,
+                    type=mj.mjtGeom.mjGEOM_PLANE,
+                    size=(10.0, 10.0, 0.01),
+                )
+            case vis if isinstance(vis, BoxVisualRecord):
+                vis_geom_spec = body_spec.add_geom(
+                    name=vis.name,
+                    type=mj.mjtGeom.mjGEOM_BOX,
+                    size=vis.half_size,
+                )
+            case vis if isinstance(vis, CapsuleVisualRecord):
+                vis_geom_spec = body_spec.add_geom(
+                    name=vis.name,
+                    type=mj.mjtGeom.mjGEOM_CAPSULE,
+                    size=(vis.radius, vis.half_length, vis.radius),
+                )
+            case vis if isinstance(vis, CylinderVisualRecord):
+                vis_geom_spec = body_spec.add_geom(
+                    name=vis.name,
+                    type=mj.mjtGeom.mjGEOM_CYLINDER,
+                    size=(vis.radius, vis.half_length, vis.radius),
+                )
+            case vis if isinstance(vis, SphereVisualRecord):
+                vis_geom_spec = body_spec.add_geom(
+                    name=vis.name,
+                    type=mj.mjtGeom.mjGEOM_SPHERE,
+                    size=(vis.radius, vis.radius, vis.radius),
+                )
+                pass
+            case vis if isinstance(vis, MeshVisualRecord):
+                mesh_filepath = Path(vis.filename)
+                if not mesh_filepath.is_file():
+                    print(
+                        f"[ERROR]: convex mesh '{vis.name}' points to invalid file @ '{vis.filename}'"
+                    )
+                    continue
+
+                mesh_name = f"{vis.name}_collider"
+                _ = scene_spec.add_mesh(
+                    name=mesh_name,
+                    file=mesh_filepath.as_posix(),
+                    scale=vis.scale,
+                )
+
+                vis_geom_spec = body_spec.add_geom(
+                    name=vis.name,
+                    type=mj.mjtGeom.mjGEOM_MESH,
+                    meshname=mesh_name,
+                )
+
+        if vis_geom_spec:
+            vis_geom_spec.contype = 0
+            vis_geom_spec.conaffinity = 0
+
+            if mat_name:
+                vis_geom_spec.material = mat_name
+            else:
+                vis_geom_spec.rgba = np.array(vis.material.rgba)
