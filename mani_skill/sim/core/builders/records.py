@@ -45,6 +45,7 @@ class _CollisionRecordBase:
     pose: PoseRecord = PoseRecord()
     material: object | None = None
     density: float = 1000.0
+    rgba: Color4 = field(default_factory=lambda: copy.copy(DEFAULT_COLLIDER_RGBA))
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

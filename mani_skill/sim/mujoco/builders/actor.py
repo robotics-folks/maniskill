@@ -38,45 +38,37 @@ def add_collision_records(
     body_spec = scene_spec.worldbody if body_spec is None else body_spec
 
     for col_rec in builder.collision_records:
+        col_geom_spec: mj.MjsGeom | None = None
         match col_rec:
             case col if isinstance(col, PlaneCollisionRecord):
-                body_spec.add_geom(
+                col_geom_spec = body_spec.add_geom(
                     name=col.name,
                     type=mj.mjtGeom.mjGEOM_PLANE,
                     size=(10.0, 10.0, 0.01),
-                    rgba=DEFAULT_COLLIDER_RGBA,
                 )
             case col if isinstance(col, BoxCollisionRecord):
-                body_spec.add_geom(
+                col_geom_spec = body_spec.add_geom(
                     name=col.name,
                     type=mj.mjtGeom.mjGEOM_BOX,
                     size=col.half_size,
-                    density=col.density,
-                    rgba=DEFAULT_COLLIDER_RGBA,
                 )
             case col if isinstance(col, CapsuleCollisionRecord):
-                body_spec.add_geom(
+                col_geom_spec = body_spec.add_geom(
                     name=col.name,
                     type=mj.mjtGeom.mjGEOM_CAPSULE,
                     size=(col.radius, col.half_length, col.radius),
-                    density=col.density,
-                    rgba=DEFAULT_COLLIDER_RGBA,
                 )
             case col if isinstance(col, CylinderCollisionRecord):
-                body_spec.add_geom(
+                col_geom_spec = body_spec.add_geom(
                     name=col.name,
                     type=mj.mjtGeom.mjGEOM_CYLINDER,
                     size=(col.radius, col.half_length, col.radius),
-                    density=col.density,
-                    rgba=DEFAULT_COLLIDER_RGBA,
                 )
             case col if isinstance(col, SphereCollisionRecord):
-                body_spec.add_geom(
+                col_geom_spec = body_spec.add_geom(
                     name=col.name,
                     type=mj.mjtGeom.mjGEOM_SPHERE,
                     size=(col.radius, col.radius, col.radius),
-                    density=col.density,
-                    rgba=DEFAULT_COLLIDER_RGBA,
                 )
             case col if isinstance(col, ConvexMeshCollisionRecord):
                 mesh_filepath = Path(col.filename)
@@ -93,12 +85,10 @@ def add_collision_records(
                     scale=col.scale,
                 )
 
-                body_spec.add_geom(
+                col_geom_spec = body_spec.add_geom(
                     name=col.name,
                     type=mj.mjtGeom.mjGEOM_MESH,
                     meshname=mesh_name,
-                    density=col.density,
-                    rgba=DEFAULT_COLLIDER_RGBA,
                 )
             case col if isinstance(col, MultipleConvexMeshCollisionRecord):
                 print(
@@ -112,6 +102,11 @@ def add_collision_records(
                 print(
                     f"[WARNING]: collision record '{col.__class__.name}' not supported yet for collider '{col.name}'"
                 )
+
+        if col_geom_spec:
+            col_geom_spec.rgba = np.array(col_rec.rgba)
+            if col_geom_spec.type != mj.mjtGeom.mjGEOM_PLANE:
+                col_geom_spec.density = col_rec.density
 
 
 def add_visual_records(
